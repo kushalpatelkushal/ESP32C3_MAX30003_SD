@@ -1155,11 +1155,13 @@ const long interval = 60000;             // 1 minutes in milliseconds
 uint8_t previousBatteryPercentage = 100; // Initial battery percentage
 uint8_t battery_percentage, battery_percentage1;
 File myFile;
+int downloadInProgress = 0; // Flag to track whether file download is in progress
+bool FILEHASDATA = false;
 
 MAX30003 max30003;
 
-const char *ssid = "FIBRIART-L"; // SSID for the Access Point
-const char *password = "12345678";  // Password for the Access Point
+const char *ssid = "FIBRIART-L";   // SSID for the Access Point
+const char *password = "12345678"; // Password for the Access Point
 
 WebServer server(80);
 
@@ -1294,7 +1296,7 @@ void handleRoot()
       <header>
         <div class="container">
           <div id="branding">
-            <h1><span class="highlight">ESP32</span> File Server</h1>
+            <h1><span class="highlight">FIBRIART-L</span> File Server</h1>
           </div>
           <nav>
             <ul>
@@ -1306,8 +1308,8 @@ void handleRoot()
       </header>
       <section id="showcase">
         <div class="container">
-          <h1>Welcome to the ESP32 File Server</h1>
-          <p>Access and manage files stored on the ESP32's SD card.</p>
+          <h1>Welcome to the FIBRIART-L File Server</h1>
+          <p>Access and manage files stored on the FIBRIART-L's SD card.</p>
         </div>
       </section>
       <div class="container content">
@@ -1360,6 +1362,7 @@ void handleFileList()
 
 void handleFileDownload()
 {
+  downloadInProgress++; // Set the flag to true when the file download starts
   if (server.hasArg("file"))
   {
     String fileName = server.arg("file");
@@ -1385,7 +1388,7 @@ void handleFileDownload()
       server.send(200, "application/octet-stream", "");
 
       // Determine the buffer size dynamically
-      size_t bufferSize = uxTaskGetStackHighWaterMark(NULL)/2; // Start with a default buffer size
+      size_t bufferSize = uxTaskGetStackHighWaterMark(NULL) / 2; // Start with a default buffer size
       // if (ESP.getFreeHeap() > bufferSize * 2) {
       //   bufferSize = ESP.getFreeHeap() / 2; // Use half of the free heap for the buffer
       // }
@@ -1403,6 +1406,15 @@ void handleFileDownload()
       delete[] buffer;
       downloadFile.close();
       Serial.println("File download completed.");
+      if (SD.remove("/hello.txt"))
+      {
+        Serial.println("File successfully deleted");
+      }
+      else
+      {
+        Serial.println("ERROR in DELETION");
+      }
+      downloadInProgress++;
     }
     else
     {
@@ -1419,11 +1431,11 @@ void handleFileDownload()
 
 void DatatoSD()
 {
-    if (!SD.begin(3))
+  if (!SD.begin(3))
   {
     Serial.println("Card Mount Failed");
   }
-  
+
   size_t dataLength = sizeof(BLE_data1);
 
   uint8_t *encryptedData = new uint8_t[dataLength]; // Dynamically allocate memory for encrypted data
@@ -1434,9 +1446,7 @@ void DatatoSD()
   byteArrayToBase64(encryptedData, dataLength, base64Str, sizeof(base64Str));
   delete[] encryptedData;
 
-
-
-  if (FILE_open == false)
+  if (SD.open("/hello.txt").size() == 0)
   {
     myFile = SD.open("/hello.txt", FILE_WRITE);
     FILE_open = true;
@@ -1452,12 +1462,12 @@ void DatatoSD()
   }
 
   myFile.println(base64Str);
-
+  // myFile.println(analogRead(1));
   myFile.flush(); // Ensure data is written to the SD card
 
   myFile.close();
   SD.end();
-
+  FILEHASDATA = true;
   data_i = 0;
 }
 
@@ -1516,13 +1526,15 @@ void setup()
   // server.begin();
   // Serial.println("HTTP server started");
   // delay(2000);
-  Serial.printf("Free stack0: %d\n", uxTaskGetStackHighWaterMark(NULL));
+  // Serial.printf("Free stack0: %d\n", uxTaskGetStackHighWaterMark(NULL));
+  // analogReadResolution(12);       // Set ADC resolution to 12 bits
+  // analogSetAttenuation(ADC_11db); // Set attenuation to handle the full 0-3.3V range
   for (int e = 0; e < 5; e++)
   {
     analogWrite(0, 255);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(1000));
     analogWrite(0, 0);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -1538,7 +1550,7 @@ void loop()
   max30003.getEcgSamples();
 
   ECG_filter = filtersRT2.movingAverage(max30003.ecgdata);
-  // Serial.println(ECG_filter);
+  Serial.println(ECG_filter);
   if (data_i < data_size)
   {
 
@@ -1549,76 +1561,52 @@ void loop()
     data_i = data_i + 2;
   }
   // Serial.printf("Free stack0: %d\n", uxTaskGetStackHighWaterMark(NULL));
-  Serial.println(data_i);
+  // Serial.println(data_i);
   if (data_i == data_size)
   {
     DatatoSD();
-    // size_t dataLength = sizeof(BLE_data1);
-
-    // uint8_t encryptedData[dataLength];
-    // // Encrypt the data
-    // encryptBLEData(BLE_data1, dataLength, encryptedData);
-
-    // char base64Str[data_size * 2]; // Make sure this is large enough to hold the encoded string
-    // byteArrayToBase64(encryptedData, dataLength, base64Str, sizeof(base64Str));
-    // // delete[] encryptedData;
-
-    // // if (!SD.begin(3))
-    // // {
-    // //   Serial.println("Card Mount Failed");
-    // // }
-
-    // if (FILE_open == false)
-    // {
-    //   myFile = SD.open("/hello.txt", FILE_WRITE);
-    //   FILE_open = true;
-    // }
-    // else
-    // {
-    //   myFile = SD.open("/hello.txt", FILE_APPEND);
-    // }
-
-    // if (!myFile)
-    // {
-    //   Serial.println("File open failed");
-    // }
-
-    // myFile.println(base64Str);
-
-    // myFile.flush(); // Ensure data is written to the SD card
-
-    // myFile.close();
-    // // SD.end();
-
-    // data_i = 0;
+    Serial.println("data written to sd card");
   }
 
-  if (digitalRead(10) == true)
+  if (digitalRead(10) == true && FILEHASDATA)
   {
-    if (getCpuFrequencyMhz() != 80)
+    delay(100);
+    if (digitalRead(10) == true)
     {
-      setCpuFrequencyMhz(80);
-    }
+      if (getCpuFrequencyMhz() != 80)
+      {
+        setCpuFrequencyMhz(80);
+      }
 
-    // Set up Access Point
-    WiFi.softAP(ssid, password);
-    IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(IP);
+      // Set up Access Point
+      WiFi.softAP(ssid, password);
+      IPAddress IP = WiFi.softAPIP();
+      Serial.print("AP IP address: ");
+      Serial.println(IP);
 
-    delay(50);
+      delay(50);
 
-    // Define routes
-    server.on("/", HTTP_GET, handleRoot);
-    server.on("/list", HTTP_GET, handleFileList);
-    server.on("/download", HTTP_GET, handleFileDownload);
+      // Define routes
+      server.on("/", HTTP_GET, handleRoot);
+      server.on("/list", HTTP_GET, handleFileList);
+      server.on("/download", HTTP_GET, handleFileDownload);
 
-    server.begin();
-    Serial.println("HTTP server started");
-    while (true)
-    {
-
-      server.handleClient();
+      server.begin();
+      Serial.println("HTTP server started");
+      while (true)
+      {
+        Serial.println("adv");
+        server.handleClient();
+        if (downloadInProgress == 2)
+        {
+          Serial.println("adv stopped");
+          downloadInProgress = 0;
+          server.stop();
+          WiFi.softAPdisconnect(true);
+          FILEHASDATA = false;
+          break; // Exit the loop when a client is connected
+        }
+      }
     }
   }
 
