@@ -1336,11 +1336,11 @@ void handleFileList()
 {
 
   // Attempt to mount the SD card
-  while (!SD.begin(3))
-  {
-    Serial.println("Card Mount Failed11");
-    return;
-  }
+  // while (!SD.begin(3))
+  // {
+  //   Serial.println("Card Mount Failed11");
+  //   return;
+  // }
 
   // myFile = SD.open("/hello.txt", FILE_READ);
   // Serial.println(myFile);
@@ -1431,10 +1431,14 @@ void handleFileDownload()
 
 void DatatoSD()
 {
-  if (!SD.begin(3))
+  if (getCpuFrequencyMhz() != 160)
   {
-    Serial.println("Card Mount Failed");
+    setCpuFrequencyMhz(160);
   }
+  // if (!SD.begin(3))
+  // {
+  //   Serial.println("Card Mount Failed");
+  // }
 
   size_t dataLength = sizeof(BLE_data1);
 
@@ -1466,9 +1470,18 @@ void DatatoSD()
   myFile.flush(); // Ensure data is written to the SD card
 
   myFile.close();
-  SD.end();
+  // SD.end();
+
   FILEHASDATA = true;
   data_i = 0;
+  analogWrite(0, 255);
+  vTaskDelay(pdMS_TO_TICKS(500));
+  analogWrite(0, 0);
+  vTaskDelay(pdMS_TO_TICKS(500));
+  if (getCpuFrequencyMhz() != 10)
+  {
+    setCpuFrequencyMhz(10);
+  }
 }
 
 void setup()
@@ -1484,6 +1497,7 @@ void setup()
   SPI.begin();
   SPI.setBitOrder(MSBFIRST);
   SPI.setDataMode(SPI_MODE0);
+  SPI.setFrequency(100000);
 
   bool ret = max30003.max30003ReadInfo();
   if (ret)
@@ -1510,25 +1524,7 @@ void setup()
     Serial.println("Card Mount Failed");
   }
   delay(50);
-  // // Set up Access Point
-  // WiFi.softAP(ssid, password);
-  // IPAddress IP = WiFi.softAPIP();
-  // Serial.print("AP IP address: ");
-  // Serial.println(IP);
 
-  // delay(50);
-
-  // // Define routes
-  // server.on("/", HTTP_GET, handleRoot);
-  // server.on("/list", HTTP_GET, handleFileList);
-  // server.on("/download", HTTP_GET, handleFileDownload);
-
-  // server.begin();
-  // Serial.println("HTTP server started");
-  // delay(2000);
-  // Serial.printf("Free stack0: %d\n", uxTaskGetStackHighWaterMark(NULL));
-  // analogReadResolution(12);       // Set ADC resolution to 12 bits
-  // analogSetAttenuation(ADC_11db); // Set attenuation to handle the full 0-3.3V range
   for (int e = 0; e < 5; e++)
   {
     analogWrite(0, 255);
@@ -1550,14 +1546,13 @@ void loop()
   max30003.getEcgSamples();
 
   ECG_filter = filtersRT2.movingAverage(max30003.ecgdata);
-  Serial.println(ECG_filter);
+  // Serial.println(ECG_filter);
   if (data_i < data_size)
   {
 
     BLE_data1[data_i] = ECG_filter;
     BLE_data1[data_i + 1] = ECG_filter >> 8;
-    // BLE_data1[data_i + 2] = ECG_filter >> 16;
-    // BLE_data1[data_i + 3] = ECG_filter >> 24;
+
     data_i = data_i + 2;
   }
   // Serial.printf("Free stack0: %d\n", uxTaskGetStackHighWaterMark(NULL));
@@ -1565,7 +1560,7 @@ void loop()
   if (data_i == data_size)
   {
     DatatoSD();
-    Serial.println("data written to sd card");
+    // Serial.println("data written to sd card");
   }
 
   if (digitalRead(10) == true && FILEHASDATA)
